@@ -117,13 +117,20 @@ export function Dashboard() {
               className="w-14 h-14 rounded-full object-cover border-2 border-blue-400"
             />
             <div className="flex-1">
-              <h1 className="text-lg font-medium text-white">{shop.shopName || "Loading..."}</h1>
-              <Link to="/profile" className="text-sm text-blue-100 flex items-center gap-1 mt-0.5">
-                <Settings className="w-3 h-3" />
-                Edit Profile
-              </Link>
-            </div>
+            {shop?.shopName ? (
+              <h1 className="text-lg font-medium text-white">{shop.shopName}</h1>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-white text-sm">Loading...</span>
+              </div>
+            )}
+            <Link to="/profile" className="text-sm text-blue-100 flex items-center gap-1 mt-0.5">
+              <Settings className="w-3 h-3" />
+              Edit Profile
+            </Link>
           </div>
+        </div>
 
           {/* Stats */}
           <div className="flex gap-2">
