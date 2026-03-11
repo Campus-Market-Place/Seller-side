@@ -1,98 +1,106 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from '@/app/lib/router';
 import { Layout } from '@/app/components/Layout';
-import { Camera, Instagram, Music } from 'lucide-react';
-import { mockShopProfile } from '@/app/data/mockData';
+import { Camera, Instagram, Music, RefreshCw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Label } from '@/app/components/ui/label';
-import React, { useEffect} from 'react';
 import { getSellerProfile, updateProfile } from '../api/seller-profile';
-
 
 export function ShopProfile() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<any>(null); // start empty
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const res = await getSellerProfile();
-        const apiProfile = res.data.profile;
-  
-        setProfile({
-          name: apiProfile.shop.shopName || "",
-          description: apiProfile.shop.bio || "",
-          telegramLink: apiProfile.telegram || "",
-          instagram: apiProfile.instagram || "",
-          tiktok: apiProfile.tiktok || "",
-  
-          campusLocation: apiProfile.campusLocation || "",
-          mainPhone: apiProfile.mainPhone || "",
-          secondaryPhone: apiProfile.secondaryPhone || "",
-  
-          categoryId: apiProfile.shop.categoryId || "",
-  
-          logo: apiProfile.shop.profileImage || "/default-shop.png",
-        });
-  
-      } catch (err) {
-        console.error("Failed to load profile:", err);
-      } finally {
-        setLoading(false);
-      }
+  const [error, setError] = useState(false);
+
+  const loadProfile = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await getSellerProfile();
+      const apiProfile = res.data.profile;
+
+      setProfile({
+        name: apiProfile.shop.shopName || "",
+        description: apiProfile.shop.bio || "",
+        telegramLink: apiProfile.telegram || "",
+        instagram: apiProfile.instagram || "",
+        tiktok: apiProfile.tiktok || "",
+        campusLocation: apiProfile.campusLocation || "",
+        mainPhone: apiProfile.mainPhone || "",
+        secondaryPhone: apiProfile.secondaryPhone || "",
+        categoryId: apiProfile.shop.categoryId || "",
+        logo: apiProfile.shop.profileImage || "/default-shop.png",
+      });
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
     }
-  
+  };
+
+  useEffect(() => {
     loadProfile();
   }, []);
-  
 
   const handleSave = async () => {
     try {
       const res = await updateProfile({
         shopName: profile.name,
         description: profile.description,
-  
         campusLocation: profile.campusLocation,
         mainPhone: profile.mainPhone,
         secondaryPhone: profile.secondaryPhone,
-  
         instagram: profile.instagram,
         telegram: profile.telegramLink,
         tiktok: profile.tiktok,
         profileImage: profile.profileImagePublicId ? [profile.profileImagePublicId] : undefined,
-     //   profileImage: [profile.profileImagePublicId], // send publicId for PATCH
-  
         agreedToRules: true,
       });
-  
+
       alert("Profile updated successfully!");
-  
-      // ✅ Dispatch the shop-updated event with the new logo
-      //const updatedLogo = res.data.profile.shop.profileImageUrl || profile.logo;
+
       const updatedLogo = profile.logo;
       window.dispatchEvent(
         new CustomEvent("shop-updated", { detail: { logo: updatedLogo } })
       );
-  
     } catch (err) {
       console.error(err);
       alert("Failed to update profile");
     }
   };
-  
-  
-  
-  if (loading || !profile) {
+
+  if (loading) {
     return (
       <Layout title="Shop Profile" showBack>
-        <div className="p-4 text-gray-500">Loading profile...</div>
+        <div className="flex flex-col items-center justify-center py-20">
+          {/* Circular Spinner */}
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-500">Loading profile...</p>
+        </div>
       </Layout>
     );
   }
-  
+
+  if (error) {
+    return (
+      <Layout title="Shop Profile" showBack>
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+          <p className="text-red-500">Failed to load profile.</p>
+          <Button
+            className="flex items-center gap-2"
+            onClick={loadProfile}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Shop Profile" showBack>
       <div className="px-4 py-6 pb-24">
@@ -104,61 +112,43 @@ export function ShopProfile() {
               alt="Shop logo"
               className="w-20 h-20 rounded-full object-cover"
             />
-
             <label className="absolute bottom-0 right-0 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center cursor-pointer">
               <Camera className="w-3.5 h-3.5 text-white" />
-
               <input
-  type="file"
-  accept="image/*"
-  className="hidden"
-  onChange={async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
 
-    // 1️⃣ Show preview immediately
-    const previewUrl = URL.createObjectURL(file);
-    setProfile(prev => ({
-      ...prev,
-      logo: previewUrl,
-    }));
+                  const previewUrl = URL.createObjectURL(file);
+                  setProfile(prev => ({ ...prev, logo: previewUrl }));
 
-    // Send the file in the same PATCH request using your updateProfile
-    await updateProfile({
-      profileImage: [file], // or whatever your backend expects
-      shopName: profile.name,
-      description: profile.description,
-      campusLocation: profile.campusLocation,
-      mainPhone: profile.mainPhone,
-      secondaryPhone: profile.secondaryPhone,
-      instagram: profile.instagram,
-      telegram: profile.telegramLink,
-      tiktok: profile.tiktok,
-      agreedToRules: true,
-    });
+                  await updateProfile({
+                    profileImage: [file],
+                    shopName: profile.name,
+                    description: profile.description,
+                    campusLocation: profile.campusLocation,
+                    mainPhone: profile.mainPhone,
+                    secondaryPhone: profile.secondaryPhone,
+                    instagram: profile.instagram,
+                    telegram: profile.telegramLink,
+                    tiktok: profile.tiktok,
+                    agreedToRules: true,
+                  });
 
-    // Notify dashboard to refresh the image
-    window.dispatchEvent(
-      new CustomEvent("shop-updated", { detail: { logo: previewUrl } })
-    );
-    // 2️⃣ Convert to base64 or upload first if needed to get publicId
-    // But if your backend just wants profileImagePublicId, 
-    // you can handle this in handleSave()
-
-    // Optional: if you already have an API that gives publicId when you upload the image
-    // you can call that here and save profileImagePublicId
-    // Otherwise, handle this when user clicks Save
-  }}
-/>
-
+                  window.dispatchEvent(
+                    new CustomEvent("shop-updated", { detail: { logo: previewUrl } })
+                  );
+                }}
+              />
             </label>
           </div>
-
           <p className="text-xs text-gray-500 mt-2">
             Tap to change logo
           </p>
         </div>
-
 
         {/* Shop Name */}
         <div className="mb-4">
@@ -188,55 +178,45 @@ export function ShopProfile() {
           />
         </div>
 
-                {/* campus location */}
+        {/* Campus location */}
         <div className="mb-4">
           <Label>Campus Location</Label>
           <Input
             value={profile.campusLocation}
-            onChange={(e) =>
-              setProfile({ ...profile, campusLocation: e.target.value })
-            }
+            onChange={(e) => setProfile({ ...profile, campusLocation: e.target.value })}
           />
         </div>
 
-            {/* Main Phone */}
+        {/* Main Phone */}
         <div className="mb-4">
-            <Label>Main Phone</Label>
-            <Input
-              value={profile.mainPhone}
-              onChange={(e) =>
-                setProfile({ ...profile, mainPhone: e.target.value })
-              }
-            />
-          </div>
+          <Label>Main Phone</Label>
+          <Input
+            value={profile.mainPhone}
+            onChange={(e) => setProfile({ ...profile, mainPhone: e.target.value })}
+          />
+        </div>
 
-          <div className="mb-4">
-            <Label>Secondary Phone</Label>
-            <Input
-              value={profile.secondaryPhone}
-              onChange={(e) =>
-                setProfile({ ...profile, secondaryPhone: e.target.value })
-              }
-            />
-          </div>
-
-
-
+        {/* Secondary Phone */}
+        <div className="mb-4">
+          <Label>Secondary Phone</Label>
+          <Input
+            value={profile.secondaryPhone}
+            onChange={(e) => setProfile({ ...profile, secondaryPhone: e.target.value })}
+          />
+        </div>
 
         {/* Telegram Link */}
         <div className="mb-6 pb-6 border-b border-gray-100">
           <Label htmlFor="telegram" className="text-sm font-medium text-gray-900 mb-2 block">
             Telegram Link <span className="text-red-500">*</span>
           </Label>
-          <div className="relative">
-            <Input
-              id="telegram"
-              value={profile.telegramLink}
-              onChange={(e) => setProfile({ ...profile, telegramLink: e.target.value })}
-              className="h-11 text-base"
-              placeholder="t.me/yourshop"
-            />
-          </div>
+          <Input
+            id="telegram"
+            value={profile.telegramLink}
+            onChange={(e) => setProfile({ ...profile, telegramLink: e.target.value })}
+            className="h-11 text-base"
+            placeholder="t.me/yourshop"
+          />
           <p className="text-xs text-gray-500 mt-1.5">
             Customers will contact you via this link
           </p>
@@ -252,15 +232,13 @@ export function ShopProfile() {
               <Instagram className="w-4 h-4 text-pink-500" />
               Instagram
             </Label>
-            <div className="relative">
-              <Input
-                id="instagram"
-                value={profile.instagram || ''}
-                onChange={(e) => setProfile({ ...profile, instagram: e.target.value })}
-                className="h-11 text-base pl-3"
-                placeholder="username"
-              />
-            </div>
+            <Input
+              id="instagram"
+              value={profile.instagram || ''}
+              onChange={(e) => setProfile({ ...profile, instagram: e.target.value })}
+              className="h-11 text-base pl-3"
+              placeholder="username"
+            />
           </div>
 
           {/* TikTok */}
@@ -269,15 +247,13 @@ export function ShopProfile() {
               <Music className="w-4 h-4 text-gray-900" />
               TikTok
             </Label>
-            <div className="relative">
-              <Input
-                id="tiktok"
-                value={profile.tiktok || ''}
-                onChange={(e) => setProfile({ ...profile, tiktok: e.target.value })}
-                className="h-11 text-base pl-3"
-                placeholder="@username"
-              />
-            </div>
+            <Input
+              id="tiktok"
+              value={profile.tiktok || ''}
+              onChange={(e) => setProfile({ ...profile, tiktok: e.target.value })}
+              className="h-11 text-base pl-3"
+              placeholder="@username"
+            />
           </div>
         </div>
       </div>
