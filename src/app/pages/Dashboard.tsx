@@ -1,92 +1,110 @@
 import { Link } from '@/app/lib/router';
 import { Layout } from '@/app/components/Layout';
-import { Plus, Package, Users, Bell, Settings, Eye, UserPlus } from 'lucide-react';
+import { Plus, Package, Users, Bell, Settings, Eye, UserPlus, RefreshCw } from 'lucide-react';
 
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../api/client';
 import { Product } from './ProductList';
 import { Activity, Follower } from '../../types/data';
 import { getFollowers } from '../api/followers';
-//import { getMyProfile } from '../api/seller-profile';
 
 export function Dashboard() {
-  //const activeProducts = mockProducts.filter(p => p.status === 'active').length;
-  //const pendingProducts = mockProducts.filter(p => p.status === 'pending').length;
-  //const [profile, setProfile] = useState<any>(null);
-  //const [shopName, setShopName] = useState<string>("");
-  const [shop, setShop] = React.useState<any>(null);
+  const [shop, setShop] = useState<any>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    async function fetchShopData() {
-      try {
-        // 1️⃣ Get seller profile
-        const profileResponse = await apiFetch("/api/seller-profile");
-        const shopId = profileResponse.data.profile.shop.id;
+  const fetchShopData = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      // 1️⃣ Get seller profile
+      const profileResponse = await apiFetch("/seller-profile");
+      const shopId = profileResponse.data.profile.shop.id;
 
-        // 2️⃣ Get full shop details
-        const shopResponse = await apiFetch(`/api/shop/${shopId}`);
-        setShop(shopResponse.data.shop);
+      // 2️⃣ Get full shop details
+      const shopResponse = await apiFetch(`/shop/${shopId}`);
+      setShop(shopResponse.data.shop);
 
-        const followersData: Follower[] = await getFollowers(shopId);
+      const followersData: Follower[] = await getFollowers(shopId);
+      const followerNotifications: Activity[] = followersData.map(f => ({
+        id: `follower-${f.id}`,
+        type: "follower",
+        message: `@${f.user.username} started following your shop`,
+        time: "Recently",
+        timestamp: Date.now() - Math.floor(Math.random() * 1000000),
+      }));
 
-        const followerNotifications: Activity[] = followersData.map(f => ({
-          id: `follower-${f.id}`,
-          type: "follower",
-          message: `@${f.user.username} started following your shop`,
-          time: "Recently",
-          timestamp: Date.now() - Math.floor(Math.random() * 1000000), // example: use actual follow time
-        }));
-        
-  
-        // Products
-        const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
-        const productsData = productsRes.data.products; // ✅ important
+      // Products
+      const productsRes: any = await apiFetch(`/products/shop/${shopId}`);
+      const productsData = productsRes.data.products;
+      setProducts(productsData);
 
-        setProducts(productsData);
-  
-        const productNotifications: Activity[] = productsData.map(p => ({
-          id: `product-${p.id}`,
-          type: "product",
-          message: `Product "${p.name}" is ${p.status} in your shop`,
-          time: "Recently",
-          timestamp: new Date(p.updatedAt || Date.now()).getTime(), // use actual updatedAt if available
-        }));
-  
-        // 2️⃣ Combine and sort by timestamp (newest first)
-          const combinedActivities = [...followerNotifications, ...productNotifications]
-            .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-          .slice(0, 8); // limit to 8 if needed
+      const productNotifications: Activity[] = productsData.map(p => ({
+        id: `product-${p.id}`,
+        type: "product",
+        message: `Product "${p.name}" is ${p.status} in your shop`,
+        time: "Recently",
+        timestamp: new Date(p.updatedAt || Date.now()).getTime(),
+      }));
 
-          setRecentActivities(combinedActivities);
-      
-      } catch (error) {
-        console.error(error);
-      }
+      const combinedActivities = [...followerNotifications, ...productNotifications]
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+        .slice(0, 8);
+
+      setRecentActivities(combinedActivities);
+    } catch (err) {
+      console.error(err);
+      setError(true);
+    } finally {
+      setLoading(false);
     }
-    fetchShopData();
-
-     // ✅ Listen for updates from ShopProfile
-  const handler = (e: any) => {
-    setShop(prev => ({
-      ...prev,
-      profileImageUrl: e.detail.logo,
-    }));
   };
 
-  window.addEventListener("shop-updated", handler);
+  useEffect(() => {
+    fetchShopData();
 
-  return () => window.removeEventListener("shop-updated", handler);
-   
+    const handler = (e: any) => {
+      setShop(prev => ({
+        ...prev,
+        profileImageUrl: e.detail.logo,
+      }));
+    };
+
+    window.addEventListener("shop-updated", handler);
+    return () => window.removeEventListener("shop-updated", handler);
   }, []);
 
-  if (!shop) return <Layout>Loading...</Layout>;
-
-  //const activeProducts = shop.products.filter((p: any) => p.status === 'active').length;
-  //nst pendingProducts = shop.products.filter((p: any) => p.status === 'pending').length;
-  //nst activeProducts = products.filter(p => p.status === "active").length;
   const activeProducts = products.filter(p => p.isActive).length;
+
+  // 🔹 Loading State
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-500">Loading dashboard...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  // 🔹 Error State
+  if (error) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+          <p className="text-red-500">Failed to load dashboard.</p>
+          <Button className="flex items-center gap-2" onClick={fetchShopData}>
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex flex-col">
@@ -95,7 +113,7 @@ export function Dashboard() {
           <div className="flex items-center gap-3 mb-4">
             <img
               src={shop.profileImageUrl || "/default-shop.png"}
-              alt={"hh" }
+              alt="Shop"
               className="w-14 h-14 rounded-full object-cover border-2 border-blue-400"
             />
             <div className="flex-1">
@@ -167,27 +185,27 @@ export function Dashboard() {
         <div className="px-4 py-4">
           <h2 className="text-sm font-medium text-gray-900 mb-3">Recent Activity</h2>
           <div className="divide-y divide-gray-100 border-t border-b border-gray-100">
-          {recentActivities.length === 0 && (
-  <div className="p-4 text-sm text-gray-500">No recent activity yet.</div>
-)}
+            {recentActivities.length === 0 && (
+              <div className="p-4 text-sm text-gray-500">No recent activity yet.</div>
+            )}
 
-{recentActivities.map(activity => (
-  <div key={activity.id} className="flex items-start gap-3 py-3">
-    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-      activity.type === 'follower' ? 'bg-blue-100' : 'bg-green-100'
-    }`}>
-      {activity.type === 'follower' ? (
-        <UserPlus className="w-4.5 h-4.5 text-blue-600" />
-      ) : (
-        <Eye className="w-4.5 h-4.5 text-green-600" />
-      )}
-    </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm text-gray-900 leading-snug">{activity.message}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{activity.time}</p>
-    </div>
-  </div>
-))}
+            {recentActivities.map(activity => (
+              <div key={activity.id} className="flex items-start gap-3 py-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  activity.type === 'follower' ? 'bg-blue-100' : 'bg-green-100'
+                }`}>
+                  {activity.type === 'follower' ? (
+                    <UserPlus className="w-4.5 h-4.5 text-blue-600" />
+                  ) : (
+                    <Eye className="w-4.5 h-4.5 text-green-600" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900 leading-snug">{activity.message}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{activity.time}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

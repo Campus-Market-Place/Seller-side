@@ -9,60 +9,56 @@ import { Product } from "./ProductList";
 export function Notifications() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const fetchShopData = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      // 1️⃣ Get seller profile
+      const profileResponse = await apiFetch("/api/seller-profile");
+      const shopId = profileResponse?.data?.profile?.shop?.id;
+      if (!shopId) throw new Error("Shop ID not found");
+
+      // 2️⃣ Get followers
+      const followersData: Follower[] = await getFollowers(shopId);
+      const followerNotifications: Activity[] = followersData.map(f => ({
+        id: `follower-${f.id}`,
+        type: "follower",
+        message: `@${f.user.username} started following your shop`,
+        time: "Recently",
+        timestamp: new Date(f.createdAt).getTime(),
+      }));
+
+      // 3️⃣ Get products
+      const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
+      const productsData: Product[] = productsRes.data.products;
+      const productNotifications: Activity[] = productsData.map(p => ({
+        id: `product-${p.id}`,
+        type: "product",
+        message: `Product "${p.name}" is ${p.status.toLowerCase()} in your shop`,
+        time: "Recently",
+        timestamp: new Date(p.updatedAt || Date.now()).getTime(),
+      }));
+
+      // 4️⃣ Combine and sort by timestamp
+      const combinedActivities = [...followerNotifications, ...productNotifications]
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+
+      setRecentActivities(combinedActivities);
+    } catch (err) {
+      console.error("Error loading notifications:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // ✅ fetch data function
-    async function fetchShopData() {
-      try {
-        setLoading(true);
-
-        // 1️⃣ Get seller profile
-        const profileResponse = await apiFetch("/api/seller-profile");
-        const shopId = profileResponse.data.profile.shop.id;
-        if (!shopId) return;
-
-        // 2️⃣ Get followers
-        const followersData: Follower[] = await getFollowers(shopId);
-        const followerNotifications: Activity[] = followersData.map(f => ({
-          id: `follower-${f.id}`,
-          type: "follower",
-          message: `@${f.user.username} started following your shop`,
-          time: "Recently",
-          timestamp: new Date(f.createdAt).getTime(), // use actual follow time
-        }));
-
-        // 3️⃣ Get products
-        const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
-        const productsData: Product[] = productsRes.data.products;
-        const productNotifications: Activity[] = productsData.map(p => ({
-          id: `product-${p.id}`,
-          type: "product",
-          message: `Product "${p.name}" is ${p.status.toLowerCase()} in your shop`,
-          time: "Recently",
-          //mestamp: new Date(p.updatedAt || Date.now()).getTime(), // fallback to now
-        }));
-
-        // 4️⃣ Combine and sort by timestamp (newest first)
-        const combinedActivities = [...followerNotifications, ...productNotifications]
-          .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-         //slice(0, 8); // show latest 8 updates
-
-        setRecentActivities(combinedActivities);
-      } catch (error) {
-        console.error("Error loading notifications:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // Initial fetch
     fetchShopData();
 
-    // Poll every 15 seconds for new updates
-    const interval = setInterval(() => {
-      fetchShopData();
-    }, 15000);
-
+    // ✅ Auto-refresh every 15 seconds
+    const interval = setInterval(fetchShopData, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -89,10 +85,28 @@ export function Notifications() {
         </div>
 
         {/* Loading */}
-        {loading && <div className="p-4 text-sm text-gray-500">Loading updates...</div>}
+        {loading && !error && (
+          <div className="flex flex-col items-center justify-center py-10">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-gray-500">Loading updates...</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="flex flex-col items-center justify-center py-10 space-y-2">
+            <p className="text-red-500">Failed to load updates.</p>
+            <button
+              className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg"
+              onClick={fetchShopData}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Notifications */}
-        {!loading && (
+        {!loading && !error && (
           <div className="divide-y divide-gray-100">
             {recentActivities.length === 0 ? (
               <div className="p-4 text-sm text-gray-500">No notifications yet.</div>
@@ -122,3 +136,4 @@ export function Notifications() {
     </Layout>
   );
 }
+
