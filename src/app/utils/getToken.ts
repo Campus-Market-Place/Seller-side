@@ -22,6 +22,9 @@ export function getTokenFromUrl(): string | null {
   return token;
 }
 
+/**
+ * Get token from localStorage
+ */
 export function getTokenFromStorage(): string | null {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   console.log(`${AUTH_DEBUG_PREFIX} getTokenFromStorage`, {
@@ -41,20 +44,38 @@ export function removeTokenFromUrl() {
 }
 
 /**
- * Optional: get token safely for API calls
- * Reads from URL (preferred) or fallback state/localStorage if needed
+ * Get token safely for API calls
+ * First checks localStorage, then URL, and saves URL token if found
  */
 export function getToken(): string {
-  const token = getTokenFromUrl() || getTokenFromStorage();
-  if (!token) {
-    console.error(`${AUTH_DEBUG_PREFIX} getToken failed`, {
-      reason: "No auth token in URL or localStorage",
+  // 1️⃣ Try localStorage first
+  let token = getTokenFromStorage();
+  if (token) {
+    console.log(`${AUTH_DEBUG_PREFIX} getToken success (from storage)`, {
+      token: maskToken(token),
     });
-    throw new Error("No auth token found. Please login via Telegram bot.");
+    return token;
   }
 
-  console.log(`${AUTH_DEBUG_PREFIX} getToken success`, {
-    token: maskToken(token),
+  // 2️⃣ Fallback to URL token
+  token = getTokenFromUrl();
+  if (token) {
+    console.log(`${AUTH_DEBUG_PREFIX} getToken success (from URL)`, {
+      token: maskToken(token),
+    });
+    try {
+      // Save token to localStorage for next requests
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      console.log(`${AUTH_DEBUG_PREFIX} saved token to localStorage`);
+    } catch (err) {
+      console.warn(`${AUTH_DEBUG_PREFIX} could not save token`, err);
+    }
+    return token;
+  }
+
+  // 3️⃣ If no token found
+  console.error(`${AUTH_DEBUG_PREFIX} getToken failed`, {
+    reason: "No auth token in URL or localStorage",
   });
-  return token;
+  throw new Error("No auth token found. Please login via Telegram bot.");
 }

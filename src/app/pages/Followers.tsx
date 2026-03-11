@@ -41,10 +41,22 @@ export function Followers() {
     }
   };
 
-  useEffect(() => {
+  /*useEffect(() => {
     loadFollowers();
 
     // Auto-refresh every 60 seconds
+    const interval = setInterval(loadFollowers, 60000);
+    return () => clearInterval(interval);
+  }, []);*/
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      setError(true); // Or show a login button
+      setLoading(false);
+      return;
+    }
+  
+    loadFollowers(); // Token exists, safe to fetch
     const interval = setInterval(loadFollowers, 60000);
     return () => clearInterval(interval);
   }, []);
