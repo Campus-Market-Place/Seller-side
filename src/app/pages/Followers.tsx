@@ -3,29 +3,34 @@ import React, { useEffect, useState } from 'react';
 import { Follower } from '../../types/data';
 import { getFollowers } from '../api/followers';
 import { apiFetch } from '../api/client';
-
-
+import { getToken } from '../utils/getToken';
 
 export function Followers() {
   const [followers, setFollowers] = useState<Follower[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [tokenMissing, setTokenMissing] = useState(false);
 
   // Function to load followers
   const loadFollowers = async () => {
     setLoading(true);
     setError(false);
+    setTokenMissing(false);
+
     try {
-      // STEP 1: get seller profile
-      const sellerProfile = await apiFetch("/api/seller-profile");
+      const token = getToken();
+      if (!token) {
+        setTokenMissing(true);
+        return; // stop fetching
+      }
+
+      // 1️⃣ Get seller profile
+      const sellerProfile = await apiFetch("/api/seller-profile", {}, token);
       const shopId = sellerProfile?.data?.profile?.shop?.id;
       if (!shopId) throw new Error("Shop ID not found");
 
-      console.log("ShopId:", shopId);
-
-      // STEP 2: get followers
+      // 2️⃣ Get followers
       const data = await getFollowers(shopId);
-      console.log("Followers:", data);
       setFollowers(data);
 
     } catch (err) {
@@ -39,9 +44,8 @@ export function Followers() {
   useEffect(() => {
     loadFollowers();
 
-    // ✅ Auto refresh every 60 seconds
+    // Auto-refresh every 60 seconds
     const interval = setInterval(loadFollowers, 60000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -56,8 +60,23 @@ export function Followers() {
           </p>
         </div>
 
+        {/* Token missing / login prompt */}
+        {tokenMissing && (
+          <div className="flex flex-col items-center justify-center py-10 space-y-2">
+            <p className="text-red-500 text-center">
+              You are not logged in. Please login via Telegram to see your followers.
+            </p>
+            <a
+              href="YOUR_TELEGRAM_BOT_LOGIN_URL"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+            >
+              Login via Telegram
+            </a>
+          </div>
+        )}
+
         {/* Loading */}
-        {loading && (
+        {loading && !tokenMissing && (
           <div className="flex flex-col items-center justify-center py-10">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="mt-4 text-gray-500">Loading followers...</p>
@@ -65,7 +84,7 @@ export function Followers() {
         )}
 
         {/* Error */}
-        {error && (
+        {error && !tokenMissing && (
           <div className="flex flex-col items-center justify-center py-10 space-y-2">
             <p className="text-red-500">Failed to load followers.</p>
             <button
@@ -78,7 +97,7 @@ export function Followers() {
         )}
 
         {/* Followers List */}
-        {!loading && !error && (
+        {!loading && !error && !tokenMissing && (
           <div className="divide-y divide-gray-100">
             {followers.map((follower) => (
               <div key={follower.id} className="flex items-center gap-3 px-4 py-3">
@@ -101,11 +120,13 @@ export function Followers() {
         )}
 
         {/* Info Note */}
-        <div className="mx-4 mt-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-600">
-          <p className="text-sm text-blue-900">
-            💡 These users follow your shop and see your updates.
-          </p>
-        </div>
+        {!tokenMissing && (
+          <div className="mx-4 mt-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-600">
+            <p className="text-sm text-blue-900">
+              💡 These users follow your shop and see your updates.
+            </p>
+          </div>
+        )}
       </div>
     </Layout>
   );
