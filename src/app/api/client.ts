@@ -1,7 +1,5 @@
 import { getToken } from "../utils/getToken";
-
-// src/services/clientApi.ts
-const API_BASE_URL = "https://backend-ikou.onrender.com/api";
+const API_BASE_URL = "https://backend-ikou.onrender.com"; // Base URL for all API calls
 
 
 const AUTH_DEBUG_PREFIX = "[AUTH][apiFetch]";
