@@ -17,7 +17,7 @@ export function Followers() {
     setError(false);
     try {
       // STEP 1: get seller profile
-      const sellerProfile = await apiFetch("/seller-profile");
+      const sellerProfile = await apiFetch("/api/seller-profile");
       const shopId = sellerProfile?.data?.profile?.shop?.id;
       if (!shopId) throw new Error("Shop ID not found");
 
