@@ -21,11 +21,11 @@ export function Dashboard() {
     setError(false);
     try {
       // 1️⃣ Get seller profile
-      const profileResponse = await apiFetch("/seller-profile");
+      const profileResponse = await apiFetch("/api/seller-profile");
       const shopId = profileResponse.data.profile.shop.id;
 
       // 2️⃣ Get full shop details
-      const shopResponse = await apiFetch(`/shop/${shopId}`);
+      const shopResponse = await apiFetch(`/api/shop/${shopId}`);
       setShop(shopResponse.data.shop);
 
       const followersData: Follower[] = await getFollowers(shopId);
@@ -38,7 +38,7 @@ export function Dashboard() {
       }));
 
       // Products
-      const productsRes: any = await apiFetch(`/products/shop/${shopId}`);
+      const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
       const productsData = productsRes.data.products;
       setProducts(productsData);
 
