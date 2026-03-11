@@ -5,6 +5,7 @@ import { ProductForm } from '@/app/pages/ProductForm';
 import { Followers } from '@/app/pages/Followers';
 import { Notifications } from '@/app/pages/Notifications';
 import { NotFound } from '@/app/pages/NotFound';
+import React from 'react';
 
 export const routes = [
   {

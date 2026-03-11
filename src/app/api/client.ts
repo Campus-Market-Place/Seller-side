@@ -1,24 +1,64 @@
-const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL;
-//const TOKEN = (import.meta as any).env.VITE_USER_TOKEN; // read token from .env
-//const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYmQwMTJmNi03M2I0LTRkZmEtOGMzMS00MzI0OGRiNzJmNDQiLCJyb2xlIjoiVVNFUiIsInVzZXJuYW1lIjoibWFtYV9taWEiLCJpYXQiOjE3NzEzMDc1OTksImV4cCI6MTc3MTkxMjM5OX0.VE69smayVwaqt9ecTmMI2EjFM3QqaPh9X1huRXtzHgc"; // dev only
-//const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxYzA1MGVmMS00MTFiLTQ2OTAtYjU1Mi0zNmJmN2UyZjA3NDUiLCJyb2xlIjoiU0VMTEVSIiwidXNlcm5hbWUiOiJxYW50YTEwIiwiaWF0IjoxNzcwOTk5NTQ1LCJleHAiOjE3NzE2MDQzNDV9.ZSVdL-qqCM-r6ANaeraWzxhAPhMDObiTlvweVGodEjw"
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYmQwMTJmNi03M2I0LTRkZmEtOGMzMS00MzI0OGRiNzJmNDQiLCJyb2xlIjoiU0VMTEVSIiwidXNlcm5hbWUiOiJtYW1hX21pYSIsImlhdCI6MTc3MTc3MTI4NywiZXhwIjoxNzcyMzc2MDg3fQ.CR5Xh1S81kKdtI3A4-2n4nGUMMljpKkhqtt6xYcCRNs"
+import { getToken } from "../utils/getToken";
+
+// src/services/clientApi.ts
+const API_BASE_URL = "https://backend-ikou.onrender.com/api";
 
 
-export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token") || TOKEN; // use localStorage token if exists, otherwise .env token
+const AUTH_DEBUG_PREFIX = "[AUTH][apiFetch]";
+
+function maskToken(token: string | null | undefined): string {
+  if (!token) return "<none>";
+  if (token.length <= 12) return `${token.slice(0, 4)}...`;
+  return `${token.slice(0, 8)}...${token.slice(-4)} (len=${token.length})`;
+}
+
+/**
+ * Wrapper fetch function for all API calls
+ * @param endpoint API path, e.g., "/save_product"
+ * @param options Fetch options (method, body, etc.)
+ * @param token Optional token (if not provided, will read from URL)
+ */
+export async function apiFetch(
+  endpoint: string,
+  options: RequestInit = {},
+  token?: string
+) {
+  console.log(`${AUTH_DEBUG_PREFIX} request start`, {
+    endpoint,
+    method: options.method || "GET",
+    hasExplicitToken: Boolean(token),
+  });
+
+  const authToken = token || getToken();
+  if (!authToken) throw new Error("No auth token found. Please login via Telegram bot.");
+
+  console.log(`${AUTH_DEBUG_PREFIX} resolved token`, {
+    tokenSource: token ? "function-arg" : "auth-utils",
+    token: maskToken(authToken),
+  });
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(token && { Authorization: `Bearer ${token}` }),
+      Authorization: `Bearer ${authToken}`,
     },
     ...options,
   });
 
   if (!response.ok) {
-    throw new Error("Request failed");
+    const text = await response.text();
+    console.error(`${AUTH_DEBUG_PREFIX} request failed`, {
+      endpoint,
+      status: response.status,
+      bodyPreview: text.slice(0, 200),
+    });
+    throw new Error(`Request failed (${response.status}): ${text}`);
   }
+
+  console.log(`${AUTH_DEBUG_PREFIX} request success`, {
+    endpoint,
+    status: response.status,
+  });
 
   return response.json();
 }
