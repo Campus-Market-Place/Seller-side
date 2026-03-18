@@ -1,3 +1,5 @@
+import { apiFetch } from "./client";
+
 export async function createProduct(shopId: string, data: any) {
   const formData = new FormData();
 

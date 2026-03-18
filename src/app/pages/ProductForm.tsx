@@ -80,7 +80,7 @@ export function ProductForm() {
     try {
       const profileRes = await apiFetch('/api/seller-profile');
         // ✅ ADD IT HERE
-    console.log("SELLER PROFILE:", profileRes);
+       console.log("SELLER PROFILE:", profileRes);
       const shopId = profileRes.data.profile.shop.id;
 
       const response = await createProduct(shopId, {
