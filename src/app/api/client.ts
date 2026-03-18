@@ -63,9 +63,6 @@ const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     throw new Error(`Request failed (${response.status}): ${text}`);
   }
 
-  // Log success with status code
-  // ✅ You can expand this log to include more details if needed
-
   console.log(`${AUTH_DEBUG_PREFIX} request success`, {
     endpoint,
     status: response.status,
