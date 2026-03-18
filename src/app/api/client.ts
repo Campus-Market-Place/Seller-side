@@ -35,13 +35,23 @@ export async function apiFetch(
     token: maskToken(authToken),
   });
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const isFormData = options.body instanceof FormData;
+
+const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  ...options,
+  headers: {
+    Authorization: `Bearer ${authToken}`,
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(options.headers || {}),
+  },
+});
+ /* const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
     },
     ...options,
-  });
+  });*/
 
   if (!response.ok) {
     const text = await response.text();
