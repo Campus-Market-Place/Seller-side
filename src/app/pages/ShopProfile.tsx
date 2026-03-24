@@ -56,7 +56,8 @@ export function ShopProfile() {
         instagram: profile.instagram,
         telegram: profile.telegramLink,
         tiktok: profile.tiktok,
-        profileImage: profile.profileImagePublicId ? [profile.profileImagePublicId] : undefined,
+        //profileImage: profile.profileImagePublicId ? [profile.profileImagePublicId] : undefined,
+        profileImage: profile.imageFile ? [profile.imageFile] : undefined,
         agreedToRules: true,
       });
 
@@ -77,7 +78,7 @@ export function ShopProfile() {
       <Layout title="Shop Profile" showBack>
         <div className="flex flex-col items-center justify-center py-20">
           {/* Circular Spinner */}
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
          
         </div>
       </Layout>
@@ -123,7 +124,11 @@ export function ShopProfile() {
                   if (!file) return;
 
                   const previewUrl = URL.createObjectURL(file);
-                  setProfile(prev => ({ ...prev, logo: previewUrl }));
+                  setProfile(prev => ({ 
+                  ...prev, logo: previewUrl,
+                  imageFile: file
+                
+                }));
 
                   await updateProfile({
                     profileImage: [file],

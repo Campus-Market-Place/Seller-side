@@ -45,13 +45,6 @@ const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...(options.headers || {}),
   },
 });
- /* const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
-    },
-    ...options,
-  });*/
 
   if (!response.ok) {
     const text = await response.text();
@@ -70,3 +63,67 @@ const response = await fetch(`${API_BASE_URL}${endpoint}`, {
 
   return response.json();
 }
+
+/*import { getToken } from "../utils/getToken";
+
+const API_BASE_URL = "https://backend-ikou.onrender.com";
+
+// 🔴 Hardcoded token (for testing only)
+const HARDCODED_TOKEN ="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyODc1MTg4ZC01NmI1LTQwODItODY3NC1mYmM2ZTY5ZDBmMWYiLCJyb2xlIjoiU0VMTEVSIiwidXNlcm5hbWUiOiJxdWFudGExMCIsImlhdCI6MTc3NDM1NzI1MSwiZXhwIjoxNzc0OTYyMDUxfQ.18_Ly7FAFd_DQaa-avC-0-Bhcd2vO0vyxlQVbmDxMAo";
+//"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyODc1MTg4ZC01NmI1LTQwODItODY3NC1mYmM2ZTY5ZDBmMWYiLCJyb2xlIjoiU0VMTEVSIiwidXNlcm5hbWUiOiJxdWFudGExMCIsImlhdCI6MTc3MzUwMTE4NiwiZXhwIjoxNzc0MTA1OTg2fQ.CEBbCHKoY4V36u7vaOPsBsJfpYt_LyG9dEeHRGi_5qM";
+
+const AUTH_DEBUG_PREFIX = "[AUTH][apiFetch]";
+
+function maskToken(token: string | null | undefined): string {
+  if (!token) return "<none>";
+  if (token.length <= 12) return `${token.slice(0, 4)}...`;
+  return `${token.slice(0, 8)}...${token.slice(-4)} (len=${token.length})`;
+}
+
+export async function apiFetch(
+  endpoint: string,
+  options: RequestInit = {},
+  token?: string
+) {
+  console.log(`${AUTH_DEBUG_PREFIX} request start`, {
+    endpoint,
+    method: options.method || "GET",
+  });
+
+  // 🔥 FORCE HARDCODED TOKEN (ignore everything else)
+  const authToken = HARDCODED_TOKEN;
+
+  console.log(`${AUTH_DEBUG_PREFIX} using HARDCODED token`, {
+    token: maskToken(authToken),
+  });
+
+  const isFormData = options.body instanceof FormData;
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error(`${AUTH_DEBUG_PREFIX} request failed`, {
+      endpoint,
+      status: response.status,
+      bodyPreview: text.slice(0, 200),
+    });
+    throw new Error(`Request failed (${response.status}): ${text}`);
+  }
+
+  console.log(`${AUTH_DEBUG_PREFIX} request success`, {
+    endpoint,
+    status: response.status,
+  });
+
+  return response.json();
+}
+
+*/
