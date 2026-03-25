@@ -1,105 +1,117 @@
 import { Link } from '@/app/lib/router';
 import { Layout } from '@/app/components/Layout';
 import { Button } from '@/app/components/ui/button';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { Edit } from 'lucide-react';
 import { Plus, Package, Users, Bell, Settings, Eye, UserPlus, RefreshCw } from 'lucide-react';
 
-import React, { useEffect, useState } from 'react';
-import { apiFetch } from '../api/client';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Product } from './ProductList';
-import { Activity, Follower } from '../../types/data';
-import { getFollowers } from '../api/followers';
+import { Activity } from '../../types/data';
+import {
+  useFollowersQuery,
+  useSellerProfileQuery,
+  useShopDetailQuery,
+  useShopProductsQuery,
+} from '@/app/hooks/useApiQueries';
 
 
 export function Dashboard() {
-  const [shop, setShop] = useState<any>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [shopLogoOverride, setShopLogoOverride] = useState<string | null>(null);
 
-  const fetchShopData = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      // 1️⃣ Get seller profile
-      const profileResponse = await apiFetch("/api/seller-profile");
-      const shopId = profileResponse.data.profile.shop.id;
+  const profileQuery = useSellerProfileQuery();
+  const shopId = profileQuery.data?.data?.profile?.shop?.id as string | undefined;
 
-      // 2️⃣ Get full shop details
-      const shopResponse = await apiFetch(`/api/shop/${shopId}`);
-      setShop(shopResponse.data.shop);
+  const shopQuery = useShopDetailQuery(shopId);
+  const productsQuery = useShopProductsQuery(shopId);
+  const followersQuery = useFollowersQuery(shopId);
 
-      const followersData: Follower[] = await getFollowers(shopId);
-      const followerNotifications: Activity[] = followersData.map(f => ({
-        id: `follower-${f.id}`,
-        type: "follower",
-        message: `@${f.user.username} started following your shop`,
-        time: "Recently",
-        timestamp: Date.now() - Math.floor(Math.random() * 1000000),
-      }));
+  const shop = shopQuery.data?.data?.shop;
+  const products = (productsQuery.data?.data?.products || []) as Product[];
+  const followers = followersQuery.data || [];
 
-      // Products
-      const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
-      const productsData = productsRes.data.products;
-      setProducts(productsData);
+  const recentActivities = useMemo<Activity[]>(() => {
+    const followerNotifications: Activity[] = followers.map((f) => ({
+      id: `follower-${f.id}`,
+      type: 'follower',
+      message: `@${f.user.username} started following your shop`,
+      time: 'Recently',
+      timestamp: new Date(f.createdAt).getTime(),
+    }));
 
-      const productNotifications: Activity[] = productsData.map(p => ({
-        id: `product-${p.id}`,
-        type: "product",
-        message: `Product "${p.name}" is ${p.status} in your shop`,
-        time: "Recently",
-        timestamp: new Date(p.updatedAt || Date.now()).getTime(),
-      }));
+    const productNotifications: Activity[] = products.map((p: any) => ({
+      id: `product-${p.id}`,
+      type: 'product',
+      message: `Product "${p.name}" is ${(p.isActive ?? true) ? 'active' : 'hidden'} in your shop`,
+      time: 'Recently',
+      timestamp: new Date(p.updatedAt || Date.now()).getTime(),
+    }));
 
-      const combinedActivities = [...followerNotifications, ...productNotifications]
-        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-        .slice(0, 8);
-
-      setRecentActivities(combinedActivities);
-    } catch (err) {
-      console.error(err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return [...followerNotifications, ...productNotifications]
+      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+      .slice(0, 8);
+  }, [followers, products]);
 
   useEffect(() => {
-    fetchShopData();
-
     const handler = (e: any) => {
-      setShop(prev => ({
-        ...prev,
-        profileImageUrl: e.detail.logo,
-      }));
+      setShopLogoOverride(e.detail.logo);
     };
 
     window.addEventListener("shop-updated", handler);
     return () => window.removeEventListener("shop-updated", handler);
   }, []);
 
-  const activeProducts = products.filter(p => p.isActive).length;
+  const hasAnyData = Boolean(shop) || products.length > 0 || followers.length > 0;
+  const isInitialLoading = !hasAnyData && (
+    profileQuery.isLoading ||
+    shopQuery.isLoading ||
+    productsQuery.isLoading ||
+    followersQuery.isLoading
+  );
 
-  // 🔹 Loading State
-  if (loading) {
+  const hasError = !hasAnyData && (
+    profileQuery.isError ||
+    shopQuery.isError ||
+    productsQuery.isError ||
+    followersQuery.isError
+  );
+
+  const refetchAll = () => {
+    profileQuery.refetch();
+    shopQuery.refetch();
+    productsQuery.refetch();
+    followersQuery.refetch();
+  };
+
+  const activeProducts = products.filter((p: any) => p.isActive).length;
+  const shopImage = shopLogoOverride || shop?.profileImageUrl || '/default-shop.png';
+
+  // Initial load without cache => skeletons.
+  if (isInitialLoading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-500">Loading dashboard...</p>
+        <div className="px-4 py-5">
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+          <div className="mt-4 space-y-3">
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+          </div>
         </div>
       </Layout>
     );
   }
 
-  // 🔹 Error State
-  if (error) {
+  if (hasError) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <p className="text-red-500">Failed to load dashboard.</p>
-          <Button className="flex items-center gap-2" onClick={fetchShopData}>
+          <Button className="flex items-center gap-2" onClick={refetchAll}>
             <RefreshCw className="w-4 h-4" />
             Retry
           </Button>
@@ -115,7 +127,7 @@ export function Dashboard() {
         <div className="bg-gradient-to-r from-blue-900 via-blue-500 to-blue-900 px-4 py-5">
           <div className="flex items-center gap-3 mb-4">
             <img
-              src={shop.profileImageUrl || "/default-shop.png"}
+              src={shopImage}
               alt="Shop"
               className="w-18 h-18 rounded-full object-cover border-2 border-white"
             />
@@ -140,7 +152,7 @@ export function Dashboard() {
           {/* Stats */}
           <div className="flex gap-2 items-stretch">
             <div className="flex-1 bg-blue-800 rounded-4xl p-3 flex flex-col items-center justify-center text-center">
-              <div className="text-xl font-semibold text-white">{shop.followersCount}</div>
+              <div className="text-xl font-semibold text-white">{shop?.followersCount || followers.length}</div>
               <div className="text-[11px] text-white mt-0.5">Followers</div>
             </div>
 
@@ -204,6 +216,9 @@ export function Dashboard() {
         {/* Recent Activity */}
         <div className="px-4 py-4">
               <h2 className="text-sm font-medium text-gray-900 mb-3">Recent Activity</h2>
+              {(shopQuery.isFetching || productsQuery.isFetching || followersQuery.isFetching) && (
+                <p className="text-xs text-gray-500 mb-2">Updating...</p>
+              )}
 
               <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
                 {recentActivities.length === 0 && (
