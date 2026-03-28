@@ -7,12 +7,36 @@ export const getSellerProfile = async () => {
 
 };
 
-export async function updateProfile(data: any) {
+/*export async function updateProfile(data: any) {
     return apiFetch("/api/seller-profile", {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify(data),
     });
-  }
+  }*/
+
+    export async function updateProfile(data: any) {
+      const formData = new FormData();
+    
+      Object.keys(data).forEach((key) => {
+        const value = data[key];
+    
+        if (!value) return;
+    
+        if (key === "profileImage" && Array.isArray(value)) {
+          value.forEach((file: File) => {
+            formData.append("profileImage", file);
+          });
+        } else {
+          formData.append(key, value);
+        }
+      });
+    
+      return apiFetch("/api/seller-profile", {
+        method: "PUT",
+        body: formData,
+        // Remove the invalid property
+      });
+    }
 
    /* export async function updateProfile(data: any) {
       const formData = new FormData();

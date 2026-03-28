@@ -16,6 +16,7 @@ function maskToken(token: string | null | undefined): string {
  * @param options Fetch options (method, body, etc.)
  * @param token Optional token (if not provided, will read from URL)
  */
+
 export async function apiFetch(
   endpoint: string,
   options: RequestInit = {},
@@ -64,7 +65,8 @@ const response = await fetch(`${API_BASE_URL}${endpoint}`, {
   return response.json();
 }
 
-/*import { getToken } from "../utils/getToken";
+/*
+import { getToken } from "../utils/getToken";
 
 const API_BASE_URL = "https://backend-ikou.onrender.com";
 
