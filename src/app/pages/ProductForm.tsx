@@ -206,7 +206,7 @@ export function ProductForm() {
             Price <span className="text-red-500">*</span>
           </Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">Br</span>
             <Input
               id="price"
               type="number"
