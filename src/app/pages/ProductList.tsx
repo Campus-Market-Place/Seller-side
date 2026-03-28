@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from '@/app/lib/router';
 import { Layout } from '@/app/components/Layout';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { Plus, Edit2, Trash2, Star } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { getSellerProfile } from '@/app/api/seller-profile';
 import {
-  getShopProducts,
   updateProductStatus,
   deleteProduct
 } from '@/app/api/products';
+import { useSellerProfileQuery, useShopProductsQuery } from '@/app/hooks/useApiQueries';
 
 import React from 'react';
 
@@ -24,53 +25,47 @@ export type Product = {
 };
 
 export function ProductList() {
+  const queryClient = useQueryClient();
+  const profileQuery = useSellerProfileQuery();
+  const shopId = profileQuery.data?.data?.profile?.shop?.id as string | undefined;
+  const productsQuery = useShopProductsQuery(shopId);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const backendProducts = productsQuery.data?.data?.products || [];
+  const products = useMemo<Product[]>(() => {
+    return backendProducts.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      image: p.images?.[0]?.imagePath || '',
+      rating: p.ratingAverage || 0,
+      status: p.isActive === false || p.active === false ? 'hidden' : 'active',
+      isActive: p.isActive,
+    }));
+  }, [backendProducts]);
 
-  // Load products
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-
-      const sellerRes = await getSellerProfile();
-      const shopId = sellerRes?.data?.profile?.shop?.id;
-
+  const deleteMutation = useMutation({
+    mutationFn: (productId: string) => deleteProduct(productId),
+    onSettled: () => {
       if (!shopId) return;
+      queryClient.invalidateQueries({ queryKey: ['shop-products', shopId] });
+    },
+  });
 
-      const productsRes = await getShopProducts(shopId);
-
-      const backendProducts = productsRes?.data?.products || [];
-
-      const mapped: Product[] = backendProducts.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        image: p.images?.[0]?.imagePath || "",
-        rating: p.ratingAverage || 0,
-        status: p.isActive === false || p.active === false ? "hidden" : "active",
-      }));
-
-      setProducts(mapped);
-
-    } catch (err) {
-      console.error("Failed to load products", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const toggleMutation = useMutation({
+    mutationFn: ({ productId, isActive }: { productId: string; isActive: boolean }) =>
+      updateProductStatus(productId, isActive),
+    onSettled: () => {
+      if (!shopId) return;
+      queryClient.invalidateQueries({ queryKey: ['shop-products', shopId] });
+    },
+  });
 
   // Delete
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
 
     try {
-      await deleteProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
+      await deleteMutation.mutateAsync(id);
     } catch (err: any) {
       alert(err.message || "Failed to delete product.");
       console.error(err);
@@ -84,16 +79,7 @@ export function ProductList() {
       if (!product) return;
 
       const newActive = product.status === "hidden";
-
-      await updateProductStatus(id, newActive);
-
-      setProducts(prev =>
-        prev.map(p =>
-          p.id === id
-            ? { ...p, status: newActive ? "active" : "hidden" }
-            : p
-        )
-      );
+      await toggleMutation.mutateAsync({ productId: id, isActive: newActive });
     } catch (err) {
       console.error("Status update failed", err);
     }
@@ -115,11 +101,35 @@ export function ProductList() {
     };
   };
 
-  if (loading) {
+  const isInitialLoading = products.length === 0 && (profileQuery.isLoading || productsQuery.isLoading);
+  const hasError = products.length === 0 && (profileQuery.isError || productsQuery.isError);
+
+  if (isInitialLoading) {
     return (
       <Layout title="Manage Products" showBack>
-        <div className="flex justify-center items-center py-20">
-          <div className="w-10 h-10 border-4 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+        <div className="px-4 py-5 space-y-3">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <Layout title="Manage Products" showBack>
+        <div className="px-4 py-8">
+          <p className="text-sm text-red-500 mb-2">Failed to load products.</p>
+          <button
+            className="px-3 py-1 rounded-md bg-blue-600 text-white text-sm"
+            onClick={() => {
+              profileQuery.refetch();
+              productsQuery.refetch();
+            }}
+          >
+            Retry
+          </button>
         </div>
       </Layout>
     );
@@ -135,6 +145,9 @@ export function ProductList() {
           <p className="text-sm text-gray-600">
             {products.length} {products.length === 1 ? "product" : "products"}
           </p>
+          {productsQuery.isFetching && products.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">Refreshing products...</p>
+          )}
         </div>
 
         {/* Product Cards */}
@@ -201,6 +214,7 @@ export function ProductList() {
                       {canEdit && (
                         <button
                           onClick={() => toggleStatus(product.id)}
+                          disabled={toggleMutation.isPending}
                           className="flex-1 h-8 rounded-md text-xs font-medium bg-blue-50 text-blue-900 hover:bg-blue-100 transition"
                         >
                           {product.status === "active" ? "Hide" : "Show"}
@@ -210,6 +224,8 @@ export function ProductList() {
                       {canEdit && (
                         <Link
                           to={`/products/${product.id}/edit`}
+                          title="Edit product"
+                          aria-label="Edit product"
                           className="flex items-center justify-center w-8 h-8 rounded-md bg-gray-100 hover:bg-blue-100 transition"
                         >
                           <Edit2 className="w-4 h-4 text-blue-900" />
@@ -219,6 +235,9 @@ export function ProductList() {
                       {canEdit && (
                         <button
                           onClick={() => handleDelete(product.id)}
+                          disabled={deleteMutation.isPending}
+                          title="Delete product"
+                          aria-label="Delete product"
                           className="flex items-center justify-center w-8 h-8 rounded-md bg-gray-100 hover:bg-gray-200 transition"
                         >
                           <Trash2 className="w-4 h-4 text-black-500" />

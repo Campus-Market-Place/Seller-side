@@ -1,70 +1,54 @@
 import { Layout } from "@/app/components/Layout";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { UserPlus, CheckCircle, Eye } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { getFollowers } from "../api/followers";
-import { apiFetch } from "../api/client";
-import { Activity, Follower } from "../../types/data";
-import { Product } from "./ProductList";
+import React, { useMemo } from "react";
+import { Activity } from "../../types/data";
+import {
+  useFollowersQuery,
+  useSellerProfileQuery,
+  useShopProductsQuery,
+} from "@/app/hooks/useApiQueries";
 
 export function Notifications() {
-  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const profileQuery = useSellerProfileQuery();
+  const shopId = profileQuery.data?.data?.profile?.shop?.id as string | undefined;
+  const followersQuery = useFollowersQuery(shopId);
+  const productsQuery = useShopProductsQuery(shopId);
 
-  useEffect(() => {
-    // ✅ fetch data function
-    async function fetchShopData() {
-      try {
-        setLoading(true);
+  const recentActivities = useMemo<Activity[]>(() => {
+    const followers = followersQuery.data || [];
+    const products = productsQuery.data?.data?.products || [];
 
-        // 1️⃣ Get seller profile
-        const profileResponse = await apiFetch("/api/seller-profile");
-        const shopId = profileResponse.data.profile.shop.id;
-        if (!shopId) return;
+    const followerNotifications: Activity[] = followers.map((f) => ({
+      id: `follower-${f.id}`,
+      type: "follower",
+      message: `@${f.user.username} started following your shop`,
+      time: "Recently",
+      timestamp: new Date(f.createdAt).getTime(),
+    }));
 
-        // 2️⃣ Get followers
-        const followersData: Follower[] = await getFollowers(shopId);
-        const followerNotifications: Activity[] = followersData.map(f => ({
-          id: `follower-${f.id}`,
-          type: "follower",
-          message: `@${f.user.username} started following your shop`,
-          time: "Recently",
-          timestamp: new Date(f.createdAt).getTime(), // use actual follow time
-        }));
+    const productNotifications: Activity[] = products.map((p: any) => ({
+      id: `product-${p.id}`,
+      type: "product",
+      message: `Product "${p.name}" is ${(p.isActive ?? true) ? "active" : "hidden"} in your shop`,
+      time: "Recently",
+      timestamp: new Date(p.updatedAt || Date.now()).getTime(),
+    }));
 
-        // 3️⃣ Get products
-        const productsRes: any = await apiFetch(`/api/products/shop/${shopId}`);
-        const productsData: Product[] = productsRes.data.products;
-        const productNotifications: Activity[] = productsData.map(p => ({
-          id: `product-${p.id}`,
-          type: "product",
-          message: `Product "${p.name}" is ${p.status.toLowerCase()} in your shop`,
-          time: "Recently",
-          //mestamp: new Date(p.updatedAt || Date.now()).getTime(), // fallback to now
-        }));
+    return [...followerNotifications, ...productNotifications].sort(
+      (a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)
+    );
+  }, [followersQuery.data, productsQuery.data]);
 
-        // 4️⃣ Combine and sort by timestamp (newest first)
-        const combinedActivities = [...followerNotifications, ...productNotifications]
-          .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-         //slice(0, 8); // show latest 8 updates
+  const hasAnyData = recentActivities.length > 0;
+  const loading = !hasAnyData && (profileQuery.isLoading || followersQuery.isLoading || productsQuery.isLoading);
+  const hasError = !hasAnyData && (profileQuery.isError || followersQuery.isError || productsQuery.isError);
 
-        setRecentActivities(combinedActivities);
-      } catch (error) {
-        console.error("Error loading notifications:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // Initial fetch
-    fetchShopData();
-
-    // Poll every 15 seconds for new updates
-    const interval = setInterval(() => {
-      fetchShopData();
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, []);
+  const retry = () => {
+    profileQuery.refetch();
+    followersQuery.refetch();
+    productsQuery.refetch();
+  };
 
   // Icons
   const getIcon = (type: string) => {
@@ -89,10 +73,28 @@ export function Notifications() {
         </div>
 
         {/* Loading */}
-        {loading && <div className="p-4 text-sm text-gray-500">Loading updates...</div>}
+        {loading && (
+          <div className="p-4 space-y-3">
+            <Skeleton className="h-12 w-full rounded-lg" />
+            <Skeleton className="h-12 w-full rounded-lg" />
+            <Skeleton className="h-12 w-full rounded-lg" />
+          </div>
+        )}
+
+        {hasError && (
+          <div className="p-4">
+            <p className="text-sm text-red-500 mb-2">Failed to load updates.</p>
+            <button
+              className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md"
+              onClick={retry}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Notifications */}
-        {!loading && (
+        {!loading && !hasError && (
           <div className="divide-y divide-gray-100">
             {recentActivities.length === 0 ? (
               <div className="p-4 text-sm text-gray-500">No notifications yet.</div>
@@ -117,6 +119,9 @@ export function Notifications() {
           <p className="text-sm text-gray-700 leading-relaxed">
             🔔 You'll receive notifications for new followers and product activity.
           </p>
+          {(followersQuery.isFetching || productsQuery.isFetching) && recentActivities.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">Refreshing updates...</p>
+          )}
         </div>
       </div>
     </Layout>

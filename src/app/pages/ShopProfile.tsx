@@ -4,50 +4,76 @@ import { Layout } from '@/app/components/Layout';
 import { Camera, Instagram, Music, RefreshCw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Label } from '@/app/components/ui/label';
-import { getSellerProfile, updateProfile } from '../api/seller-profile';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { updateProfile } from '../api/seller-profile';
+import { useSellerProfileQuery } from '@/app/hooks/useApiQueries';
+
+type ProfileFormState = {
+  name: string;
+  description: string;
+  telegramLink: string;
+  instagram: string;
+  tiktok: string;
+  campusLocation: string;
+  mainPhone: string;
+  secondaryPhone: string;
+  categoryId: string;
+  logo: string;
+  imageFile?: File;
+};
 
 export function ShopProfile() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const queryClient = useQueryClient();
+  const profileQuery = useSellerProfileQuery();
+  const [profile, setProfile] = useState<ProfileFormState | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
-  const loadProfile = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const res = await getSellerProfile();
-      const apiProfile = res.data.profile;
-
-      setProfile({
-        name: apiProfile.shop.shopName || "",
-        description: apiProfile.shop.bio || "",
-        telegramLink: apiProfile.telegram || "",
-        instagram: apiProfile.instagram || "",
-        tiktok: apiProfile.tiktok || "",
-        campusLocation: apiProfile.campusLocation || "",
-        mainPhone: apiProfile.mainPhone || "",
-        secondaryPhone: apiProfile.secondaryPhone || "",
-        categoryId: apiProfile.shop.categoryId || "",
-        logo: apiProfile.shop.profileImage || "/default-shop.png",
-      });
-    } catch (err) {
-      console.error("Failed to load profile:", err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const mutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
+      const shopId = profileQuery.data?.data?.profile?.shop?.id;
+      if (shopId) {
+        queryClient.invalidateQueries({ queryKey: ['shop-detail', shopId] });
+      }
+    },
+  });
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    const apiProfile = profileQuery.data?.data?.profile;
+    if (!apiProfile || isDirty) return;
+
+    setProfile({
+      name: apiProfile.shop.shopName || '',
+      description: apiProfile.shop.bio || '',
+      telegramLink: apiProfile.telegram || '',
+      instagram: apiProfile.instagram || '',
+      tiktok: apiProfile.tiktok || '',
+      campusLocation: apiProfile.campusLocation || '',
+      mainPhone: apiProfile.mainPhone || '',
+      secondaryPhone: apiProfile.secondaryPhone || '',
+      categoryId: apiProfile.shop.categoryId || '',
+      logo: apiProfile.shop.profileImage || '/default-shop.png',
+    });
+  }, [profileQuery.data, isDirty]);
+
+  const updateField = (patch: Partial<ProfileFormState>) => {
+    setIsDirty(true);
+    setProfile((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...patch };
+    });
+  };
 
   const handleSave = async () => {
+    if (!profile) return;
+
     try {
-      const res = await updateProfile({
+      await mutation.mutateAsync({
         shopName: profile.name,
         description: profile.description,
         campusLocation: profile.campusLocation,
@@ -60,6 +86,7 @@ export function ShopProfile() {
         profileImage: profile.imageFile ? [profile.imageFile] : undefined,
         agreedToRules: true,
       });
+      setIsDirty(false);
 
       alert("Profile updated successfully!");
 
@@ -73,26 +100,33 @@ export function ShopProfile() {
     }
   };
 
-  if (loading) {
+  const isInitialLoading = !profile && profileQuery.isLoading;
+  const hasError = !profile && profileQuery.isError;
+
+  if (isInitialLoading) {
     return (
       <Layout title="Shop Profile" showBack>
-        <div className="flex flex-col items-center justify-center py-20">
-          {/* Circular Spinner */}
-          <div className="w-12 h-12 border-4 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
-         
+        <div className="px-4 py-6 space-y-4">
+          <div className="flex flex-col items-center">
+            <Skeleton className="h-20 w-20 rounded-full" />
+          </div>
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
         </div>
       </Layout>
     );
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <Layout title="Shop Profile" showBack>
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <p className="text-red-500">Failed to load profile.</p>
           <Button
             className="flex items-center gap-2"
-            onClick={loadProfile}
+            onClick={() => profileQuery.refetch()}
           >
             <RefreshCw className="w-4 h-4" />
             Retry
@@ -101,6 +135,8 @@ export function ShopProfile() {
       </Layout>
     );
   }
+
+  if (!profile) return null;
 
   return (
     <Layout title="Shop Profile" showBack>
@@ -119,33 +155,34 @@ export function ShopProfile() {
                 type="file"
                 accept="image/*"
                 className="hidden"
+                aria-label="Upload shop logo"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
 
                   const previewUrl = URL.createObjectURL(file);
-                  setProfile(prev => ({ 
-                  ...prev, logo: previewUrl,
-                  imageFile: file
-                
-                }));
+                  updateField({ logo: previewUrl, imageFile: file });
 
-                  await updateProfile({
-                    profileImage: [file],
-                    shopName: profile.name,
-                    description: profile.description,
-                    campusLocation: profile.campusLocation,
-                    mainPhone: profile.mainPhone,
-                    secondaryPhone: profile.secondaryPhone,
-                    instagram: profile.instagram,
-                    telegram: profile.telegramLink,
-                    tiktok: profile.tiktok,
-                    agreedToRules: true,
-                  });
+                  try {
+                    await mutation.mutateAsync({
+                      profileImage: [file],
+                      shopName: profile.name,
+                      description: profile.description,
+                      campusLocation: profile.campusLocation,
+                      mainPhone: profile.mainPhone,
+                      secondaryPhone: profile.secondaryPhone,
+                      instagram: profile.instagram,
+                      telegram: profile.telegramLink,
+                      tiktok: profile.tiktok,
+                      agreedToRules: true,
+                    });
 
-                  window.dispatchEvent(
-                    new CustomEvent("shop-updated", { detail: { logo: previewUrl } })
-                  );
+                    window.dispatchEvent(
+                      new CustomEvent("shop-updated", { detail: { logo: previewUrl } })
+                    );
+                  } catch (err) {
+                    console.error('Failed to upload profile image:', err);
+                  }
                 }}
               />
             </label>
@@ -163,7 +200,7 @@ export function ShopProfile() {
           <Input
             id="shopName"
             value={profile.name}
-            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ name: e.target.value })}
             className="h-11 text-base"
             placeholder="Enter shop name"
           />
@@ -177,7 +214,7 @@ export function ShopProfile() {
           <Textarea
             id="description"
             value={profile.description}
-            onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateField({ description: e.target.value })}
             className="min-h-20 text-base resize-none"
             placeholder="Tell customers about your shop"
           />
@@ -188,7 +225,7 @@ export function ShopProfile() {
           <Label>Campus Location</Label>
           <Input
             value={profile.campusLocation}
-            onChange={(e) => setProfile({ ...profile, campusLocation: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ campusLocation: e.target.value })}
           />
         </div>
 
@@ -197,7 +234,7 @@ export function ShopProfile() {
           <Label>Main Phone</Label>
           <Input
             value={profile.mainPhone}
-            onChange={(e) => setProfile({ ...profile, mainPhone: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ mainPhone: e.target.value })}
           />
         </div>
 
@@ -206,7 +243,7 @@ export function ShopProfile() {
           <Label>Secondary Phone</Label>
           <Input
             value={profile.secondaryPhone}
-            onChange={(e) => setProfile({ ...profile, secondaryPhone: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ secondaryPhone: e.target.value })}
           />
         </div>
 
@@ -218,7 +255,7 @@ export function ShopProfile() {
           <Input
             id="telegram"
             value={profile.telegramLink}
-            onChange={(e) => setProfile({ ...profile, telegramLink: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ telegramLink: e.target.value })}
             className="h-11 text-base"
             placeholder="t.me/yourshop"
           />
@@ -240,7 +277,7 @@ export function ShopProfile() {
             <Input
               id="instagram"
               value={profile.instagram || ''}
-              onChange={(e) => setProfile({ ...profile, instagram: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ instagram: e.target.value })}
               className="h-11 text-base pl-3"
               placeholder="username"
             />
@@ -255,7 +292,7 @@ export function ShopProfile() {
             <Input
               id="tiktok"
               value={profile.tiktok || ''}
-              onChange={(e) => setProfile({ ...profile, tiktok: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField({ tiktok: e.target.value })}
               className="h-11 text-base pl-3"
               placeholder="@username"
             />
@@ -267,9 +304,10 @@ export function ShopProfile() {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 max-w-[480px] mx-auto">
         <Button
           onClick={handleSave}
+          disabled={mutation.isPending}
           className="w-full h-11 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg"
         >
-          Save Changes
+          {mutation.isPending ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </Layout>

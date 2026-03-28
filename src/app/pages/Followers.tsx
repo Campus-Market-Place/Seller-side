@@ -1,65 +1,28 @@
 import { Layout } from '@/app/components/Layout';
-import React, { useEffect, useState } from 'react';
-import { Follower } from '../../types/data';
-import { getFollowers } from '../api/followers';
-import { apiFetch } from '../api/client';
-import { getToken } from '../utils/getToken';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import React from 'react';
+import { useFollowersQuery, useSellerProfileQuery } from '@/app/hooks/useApiQueries';
 
 export function Followers() {
-  const [followers, setFollowers] = useState<Follower[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-  const [tokenMissing, setTokenMissing] = useState(false);
+  const profileQuery = useSellerProfileQuery();
+  const shopId = profileQuery.data?.data?.profile?.shop?.id as string | undefined;
+  const followersQuery = useFollowersQuery(shopId);
 
-  // Function to load followers
-  const loadFollowers = async () => {
-    setLoading(true);
-    setError(false);
-    setTokenMissing(false);
+  const followers = followersQuery.data || [];
+  const hasAnyData = followers.length > 0;
+  const isInitialLoading = !hasAnyData && (profileQuery.isLoading || followersQuery.isLoading);
 
-    try {
-      const token = getToken();
-      if (!token) {
-        setTokenMissing(true);
-        return; // stop fetching
-      }
+  const errorMessage =
+    (profileQuery.error as Error | undefined)?.message ||
+    (followersQuery.error as Error | undefined)?.message ||
+    '';
+  const tokenMissing = /No auth token/i.test(errorMessage);
+  const hasError = !tokenMissing && !hasAnyData && (profileQuery.isError || followersQuery.isError);
 
-      // 1️⃣ Get seller profile
-      const sellerProfile = await apiFetch("/api/seller-profile", {}, token);
-      const shopId = sellerProfile?.data?.profile?.shop?.id;
-      if (!shopId) throw new Error("Shop ID not found");
-
-      // 2️⃣ Get followers
-      const data = await getFollowers(shopId);
-      setFollowers(data);
-
-    } catch (err) {
-      console.error("Error loading followers:", err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
+  const retry = () => {
+    profileQuery.refetch();
+    followersQuery.refetch();
   };
-
-  /*useEffect(() => {
-    loadFollowers();
-
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(loadFollowers, 60000);
-    return () => clearInterval(interval);
-  }, []);*/
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setError(true); // Or show a login button
-      setLoading(false);
-      return;
-    }
-  
-    loadFollowers(); // Token exists, safe to fetch
-    const interval = setInterval(loadFollowers, 60000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <Layout title="Followers" showBack>
@@ -87,21 +50,23 @@ export function Followers() {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && !tokenMissing && (
-          <div className="flex flex-col items-center justify-center py-10">
-            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-500">Loading followers...</p>
+        {/* Loading without cache */}
+        {isInitialLoading && !tokenMissing && (
+          <div className="px-4 py-4 space-y-3">
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
           </div>
         )}
 
         {/* Error */}
-        {error && !tokenMissing && (
+        {hasError && !tokenMissing && (
           <div className="flex flex-col items-center justify-center py-10 space-y-2">
             <p className="text-red-500">Failed to load followers.</p>
             <button
               className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg"
-              onClick={loadFollowers}
+              onClick={retry}
             >
               Retry
             </button>
@@ -109,7 +74,7 @@ export function Followers() {
         )}
 
         {/* Followers List */}
-        {!loading && !error && !tokenMissing && (
+        {!isInitialLoading && !hasError && !tokenMissing && (
           <div className="divide-y divide-gray-100">
             {followers.map((follower) => (
               <div key={follower.id} className="flex items-center gap-3 px-4 py-3">
@@ -137,6 +102,9 @@ export function Followers() {
             <p className="text-sm text-blue-900">
               💡 These users follow your shop and see your updates.
             </p>
+            {followersQuery.isFetching && followers.length > 0 && (
+              <p className="text-xs text-blue-700 mt-1">Refreshing followers...</p>
+            )}
           </div>
         )}
       </div>

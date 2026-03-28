@@ -7,9 +7,10 @@ import { Input } from '@/app/components/ui/input';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createProduct } from '../api/createProduct';
-import { apiFetch } from '../api/client';
-import { getCategories } from '../api/categoriesApi';
+import { useCategoriesQuery, useSellerProfileQuery } from '@/app/hooks/useApiQueries';
 
 interface Category {
   id: string;
@@ -30,21 +31,23 @@ export function ProductForm() {
 
   const [images, setImages] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
-  // Load categories from API
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await getCategories();
-        setCategories(data);
-      } catch (err) {
-        console.error('Failed to fetch categories', err);
+  const categoriesQuery = useCategoriesQuery();
+  const profileQuery = useSellerProfileQuery();
+  const categories = (categoriesQuery.data || []) as Category[];
+
+  const createProductMutation = useMutation({
+    mutationFn: ({ shopId, payload }: { shopId: string; payload: any }) => createProduct(shopId, payload),
+    onSuccess: () => {
+      const shopId = profileQuery.data?.data?.profile?.shop?.id;
+      if (shopId) {
+        queryClient.invalidateQueries({ queryKey: ['shop-products', shopId] });
       }
-    };
-    fetchCategories();
-  }, []);
+      queryClient.invalidateQueries({ queryKey: ['saved-products'] });
+    },
+  });
 
   // Handle file selection
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,17 +81,21 @@ export function ProductForm() {
     }
 
     try {
-      const profileRes = await apiFetch('/api/seller-profile');
-        // ✅ ADD IT HERE
-       console.log("SELLER PROFILE:", profileRes);
-      const shopId = profileRes.data.profile.shop.id;
+      const shopId = profileQuery.data?.data?.profile?.shop?.id;
+      if (!shopId) {
+        alert('Could not find your shop profile. Please try again.');
+        return;
+      }
 
-      const response = await createProduct(shopId, {
+      const response = await createProductMutation.mutateAsync({
+        shopId,
+        payload: {
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
         categoryId: formData.categoryId,
         images: imageFiles,
+        },
       });
 
       console.log('Product created:', response);
@@ -101,10 +108,19 @@ export function ProductForm() {
   };
 
   const handleCancel = () => navigate('/products');
+  const isInitialLoading = categories.length === 0 && categoriesQuery.isLoading;
 
   return (
     <Layout title={isEdit ? 'Edit Product' : 'Add Product'} showBack>
       <div className="px-4 py-5 pb-24">
+        {isInitialLoading && (
+          <div className="mb-5 space-y-3">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+          </div>
+        )}
+
         {/* Image Upload */}
         <div className="mb-5">
           <input
@@ -113,6 +129,7 @@ export function ProductForm() {
             onChange={handleFileChange}
             accept="image/*"
             multiple
+            aria-label="Upload product images"
             className="hidden"
           />
           <Label className="text-sm font-medium text-gray-900 mb-2 block">
@@ -124,6 +141,8 @@ export function ProductForm() {
                 <img src={img} alt={`Product ${index + 1}`} className="w-full h-full object-cover rounded-lg" />
                 <button
                   onClick={() => handleRemoveImage(index)}
+                  aria-label={`Remove image ${index + 1}`}
+                  title={`Remove image ${index + 1}`}
                   className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center"
                 >
                   <X className="w-3.5 h-3.5 text-white" />
@@ -163,7 +182,7 @@ export function ProductForm() {
           <Input
             id="productName"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, name: e.target.value })}
             className="h-11 text-base"
             placeholder="e.g., Wireless Headphones"
           />
@@ -176,7 +195,7 @@ export function ProductForm() {
           <Textarea
             id="description"
             value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
             className="min-h-20 text-base resize-none"
             placeholder="Describe your product..."
           />
@@ -193,7 +212,7 @@ export function ProductForm() {
               type="number"
               step="0.01"
               value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, price: e.target.value })}
               className="h-11 text-base pl-8"
               placeholder="0.00"
             />
@@ -205,8 +224,8 @@ export function ProductForm() {
           <Label htmlFor="category" className="text-sm font-medium text-gray-900 mb-2 block">
             Category <span className="text-red-500">*</span>
           </Label>
-          <Select value={formData.categoryId} onValueChange={(value) => setFormData({ ...formData, categoryId: value })}>
-            <SelectTrigger className="h-11 text-base">
+          <Select value={formData.categoryId} onValueChange={(value: string) => setFormData({ ...formData, categoryId: value })}>
+            <SelectTrigger className="h-11 text-base" disabled={categoriesQuery.isLoading}>
               <SelectValue placeholder="Select a category" />
             </SelectTrigger>
             <SelectContent>
@@ -237,9 +256,10 @@ export function ProductForm() {
           </Button>
           <Button
             onClick={handleSave}
+            disabled={createProductMutation.isPending}
             className="flex-1 h-11 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg"
           >
-            {isEdit ? 'Save' : 'Submit'}
+            {createProductMutation.isPending ? 'Submitting...' : isEdit ? 'Save' : 'Submit'}
           </Button>
         </div>
       </div>

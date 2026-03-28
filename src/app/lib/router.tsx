@@ -108,14 +108,12 @@ export function Router({ routes }: RouterProps) {
   );
 }
 
-interface LinkProps {
+interface LinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
   to: string;
   children: ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
 }
 
-export function Link({ to, children, className, style }: LinkProps) {
+export function Link({ to, children, className, style, ...anchorProps }: LinkProps) {
   const { navigate } = useContext(RouteContext);
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -124,7 +122,7 @@ export function Link({ to, children, className, style }: LinkProps) {
   };
 
   return (
-    <a href={to} onClick={handleClick} className={className} style={style}>
+    <a href={to} onClick={handleClick} className={className} style={style} {...anchorProps}>
       {children}
     </a>
   );
