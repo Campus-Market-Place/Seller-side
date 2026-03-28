@@ -3,7 +3,7 @@ import { getCategories } from "@/app/api/categoriesApi";
 import { getDashboardStats } from "@/app/api/dashboard";
 import { getFollowers } from "@/app/api/followers";
 import { getNotifications } from "@/app/api/notifications";
-import { getShopProducts, getProductById, getMyProducts } from "@/app/api/products";
+import { getShopProducts, getProductById, getMyProducts, getProductDetails } from "@/app/api/products";
 import { getSellerProfile } from "@/app/api/seller-profile";
 import { getShopById } from "@/app/api/shop-profile";
 import { cacheTtl } from "@/app/lib/queryClient";
@@ -51,7 +51,10 @@ export function useShopProductsQuery(shopId?: string, page = 1, limit = 20) {
 export function useProductDetailQuery(productId?: string) {
   return useQuery({
     queryKey: queryKeys.productDetail(productId || "unknown"),
-    queryFn: () => getProductById(productId as string),
+   // queryFn: () => getProductById(productId as string),
+   // queryFn: () => getProductById(productId as string),
+   queryFn: () => getProductDetails(productId as string),
+   
     enabled: Boolean(productId),
     staleTime: cacheTtl.productDetail,
     gcTime: cacheTtl.productDetail * 3,

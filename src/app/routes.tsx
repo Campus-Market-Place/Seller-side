@@ -6,6 +6,7 @@ import { Followers } from '@/app/pages/Followers';
 import { Notifications } from '@/app/pages/Notifications';
 import { NotFound } from '@/app/pages/NotFound';
 import React from 'react';
+import { EditProductPage } from './pages/EditProductPage';
 
 export const routes = [
   {
@@ -25,8 +26,8 @@ export const routes = [
     element: <ProductForm />,
   },
   {
-    path: '/products/:id/edit',
-    element: <ProductForm />,
+    path: '/products/:productId/edit', 
+    element: <EditProductPage/>,
   },
   {
     path: '/followers',

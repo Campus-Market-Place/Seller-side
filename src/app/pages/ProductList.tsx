@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from '@/app/lib/router';
+//import { Link } from 'react-router-dom';
 import { Layout } from '@/app/components/Layout';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { Plus, Edit2, Trash2, Star } from 'lucide-react';
@@ -223,7 +224,9 @@ export function ProductList() {
 
                       {canEdit && (
                         <Link
+                        
                           to={`/products/${product.id}/edit`}
+                          //state={{ product }}
                           title="Edit product"
                           aria-label="Edit product"
                           className="flex items-center justify-center w-8 h-8 rounded-md bg-gray-100 hover:bg-blue-100 transition"
